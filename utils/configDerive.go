@@ -27,7 +27,7 @@ func ConfigDerive() []string {
 			files = []string{buildFile}
 		} else {
 			//default
-			files = []string{"main.rs"}
+			files = []string{"Cargo.toml"}
 		}
 	} else if configType == "node" || configType == "npm" {
 		if buildFile != "" {

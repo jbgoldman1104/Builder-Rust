@@ -26,7 +26,7 @@ func ProjectType() {
 		files = utils.ConfigDerive()
 	} else {
 		//default
-		files = []string{"main.go", "main.rs", "package.json", "pom.xml", "gemfile.lock", "gemfile", "requirements.txt", "Makefile", "Makefile.am"}
+		files = []string{"main.go", "Cargo.toml", "package.json", "pom.xml", "gemfile.lock", "gemfile", "requirements.txt", "Makefile", "Makefile.am"}
 	}
 
 	var filePath string
@@ -51,7 +51,7 @@ func ProjectType() {
 				spinner.LogMessage("Go project detected", "info")
 				compile.Go(finalPath)
 				return
-			} else if file == "main.rs" || configType == "rust" {
+			} else if file == "Cargo.toml" || configType == "rust" {
 				//executes go compiler
 				finalPath := createFinalPath(filePath, file)
 				utils.CopyDir()

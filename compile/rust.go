@@ -50,11 +50,11 @@ func Rust(filePath string) {
 	//install dependencies/build, if yaml build type exists install accordingly
 	buildTool := strings.ToLower(os.Getenv("BUILDER_BUILD_TOOL"))
 	//find 'rs file' to be built
-	buildFile := strings.ToLower(os.Getenv("BUILDER_BUILD_FILE"))
+	buildFile := os.Getenv("BUILDER_BUILD_FILE")
 	buildCmd := os.Getenv("BUILDER_BUILD_COMMAND")
-	//if no file defined by user, use default main.rs
+	//if no file defined by user, use default Cargo.toml
 	if buildFile == "" {
-		buildFile = "main.rs"
+		buildFile = "Cargo.toml"
 		os.Setenv("BUILDER_BUILD_FILE", buildFile)
 	}
 
@@ -66,20 +66,14 @@ func Rust(filePath string) {
 		cmd = exec.Command(buildCmdArray[0], buildCmdArray[1:]...)
 		cmd.Dir = fullPath // or whatever directory it's in
 	} else if buildTool == "rust" {
-		cmd = exec.Command("rust", "build", "-v", "-x", buildFile)
+		cmd = exec.Command("cargo", "build", "-r")
 		cmd.Dir = fullPath // or whatever directory it's in
-		os.Setenv("BUILDER_BUILD_COMMAND", "rust build -v -x "+buildFile)
+		os.Setenv("BUILDER_BUILD_COMMAND", "cargo build -r")
 	} else {
-		//default
-		if runtime.GOOS != "windows" {
-			cmd = exec.Command("rust", "build", "-v", "-x", "-o", strings.TrimSuffix(utils.GetName(), ".git"))
-			cmd.Dir = fullPath // or whatever directory it's in
-			os.Setenv("BUILDER_BUILD_COMMAND", "rust build -v -x -o "+strings.TrimSuffix(utils.GetName(), ".git"))
-		} else {
-			cmd = exec.Command("rust", "build", "-v", "-x", "-o", strings.TrimSuffix(utils.GetName(), ".git")+".exe")
-			cmd.Dir = fullPath // or whatever directory it's in
-			os.Setenv("BUILDER_BUILD_COMMAND", "rust build -v -x -o "+strings.TrimSuffix(utils.GetName(), ".git")+".exe")
-		}
+		cmd = exec.Command("cargo", "build", "-r")
+		cmd.Dir = fullPath // or whatever directory it's in
+		os.Setenv("BUILDER_BUILD_COMMAND", "cargo build -r")
+		os.Setenv("BUILDER_BUILD_TOOL", "rust")
 	}
 
 	//run cmd, check for err, log cmd
@@ -137,7 +131,7 @@ func Rust(filePath string) {
 
 	yaml.CreateBuilderYaml(fullPath)
 
-	packageGoArtifact(fullPath)
+	packageRustArtifact(fullPath)
 
 	spinner.LogMessage("Go project built successfully.", "info")
 }
@@ -145,24 +139,34 @@ func Rust(filePath string) {
 func packageRustArtifact(fullPath string) {
 	archiveExt := ""
 	artifactExt := ""
-
 	if runtime.GOOS == "windows" {
 		archiveExt = ".zip"
 		artifactExt = ".exe"
 	} else {
 		archiveExt = ".tar.gz"
-		artifactExt = "executable"
+		artifactExt = ""
 	}
+
+	extName := ""
+
+	tomlfile, _ := os.Open(fullPath+"/" + os.Getenv("BUILDER_BUILD_FILE"))
+	scanner := bufio.NewScanner(tomlfile)
+	for scanner.Scan() {
+        line:= scanner.Text()
+		if strings.HasPrefix(line, "name = ") == true {
+			extName = strings.Trim(line[7:]+artifactExt, "\"")
+		 } 
+    }
+	defer tomlfile.Close()
 
 	artifact.ArtifactDir()
 	artifactDir := os.Getenv("BUILDER_ARTIFACT_DIR")
 	outputPath := os.Getenv("BUILDER_OUTPUT_PATH")
 
 	//find artifact by extension
-	_, extName := artifact.ExtExistsFunction(fullPath, artifactExt)
 	os.Setenv("BUILDER_ARTIFACT_NAMES", extName)
 	//copy artifact, then remove artifact in workspace
-	exec.Command("cp", "-a", fullPath+"/"+extName, artifactDir).Run()
+	exec.Command("cp", "-a", fullPath+"/target/release/"+extName, artifactDir).Run()
 
 	// If outputpath provided also cp artifacts to that location
 	if outputPath != "" {
@@ -173,12 +177,12 @@ func packageRustArtifact(fullPath string) {
 			}
 		}
 
-		exec.Command("cp", "-a", fullPath+"/"+extName, outputPath).Run()
+		exec.Command("cp", "-a", fullPath+"/target/release/"+extName, outputPath).Run()
 
 		spinner.LogMessage("Artifact(s) copied to output path provided", "info")
 	}
 
-	exec.Command("rm", fullPath+"/"+extName).Run()
+	exec.Command("rm", fullPath+"/target/release/"+extName).Run()
 
 	//create metadata
 	utils.Metadata(artifactDir)
